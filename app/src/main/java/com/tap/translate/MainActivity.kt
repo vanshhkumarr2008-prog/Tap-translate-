@@ -10,10 +10,10 @@ import androidx.appcompat.app.AppCompatActivity
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main) // Design dikhane ke liye line
+        setContentView(R.layout.activity_main) // Ye line error fix karegi
 
         val btnSettings = findViewById<Button>(R.id.btnSettings)
-        btnSettings.setOnClickListener {
+        btnSettings?.setOnClickListener {
             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.parse("package:$packageName"))
             startActivity(intent)
