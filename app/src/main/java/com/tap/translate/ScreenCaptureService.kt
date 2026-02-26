@@ -16,6 +16,9 @@ import android.os.Looper
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import android.widget.Toast
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.TranslatorOptions
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -27,6 +30,13 @@ class ScreenCaptureService : Service() {
     private var imageReader: ImageReader? = null
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
+    // Translation Engine Setup (English to Hindi)
+    private val options = TranslatorOptions.Builder()
+        .setSourceLanguage(TranslateLanguage.ENGLISH)
+        .setTargetLanguage(TranslateLanguage.HINDI)
+        .build()
+    private val translator = Translation.getClient(options)
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -37,40 +47,47 @@ class ScreenCaptureService : Service() {
         val notification = Notification.Builder(this, "TAP_CHANNEL")
             .setContentTitle("Tap Translate Active")
             .setSmallIcon(android.R.drawable.ic_menu_search)
+            .setOngoing(true)
             .build()
         startForeground(1, notification)
 
         if (data != null) {
             val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             mediaProjection = projectionManager.getMediaProjection(resultCode, data)
-            startScreenCapture()
+            
+            // Pehle translation model download check karein, phir scan karein
+            translator.downloadModelIfNeeded()
+                .addOnSuccessListener {
+                    startScreenCapture()
+                }
+                .addOnFailureListener {
+                    Toast.makeText(this, "Translation model download failed!", Toast.LENGTH_SHORT).show()
+                }
         }
 
         return START_STICKY
     }
 
     private fun startScreenCapture() {
-        val metrics = resources.displayMetrics
         val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val display = windowManager.defaultDisplay
-        val realMetrics = DisplayMetrics()
-        display.getRealMetrics(realMetrics)
+        val metrics = DisplayMetrics()
+        windowManager.defaultDisplay.getRealMetrics(metrics)
 
-        imageReader = ImageReader.newInstance(realMetrics.widthPixels, realMetrics.heightPixels, PixelFormat.RGBA_8888, 2)
+        imageReader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, PixelFormat.RGBA_8888, 2)
         virtualDisplay = mediaProjection?.createVirtualDisplay(
             "ScreenCapture",
-            realMetrics.widthPixels, realMetrics.heightPixels, realMetrics.densityDpi,
+            metrics.widthPixels, metrics.heightPixels, metrics.densityDpi,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             imageReader?.surface, null, null
         )
 
-        // 2 second baad screen read karna
+        // 2 second ka wait taaki screen load ho jaye
         Handler(Looper.getMainLooper()).postDelayed({
-            captureAndRecognize()
+            captureAndTranslate()
         }, 2000)
     }
 
-    private fun captureAndRecognize() {
+    private fun captureAndTranslate() {
         val image = imageReader?.acquireLatestImage()
         if (image != null) {
             val planes = image.planes
@@ -83,23 +100,30 @@ class ScreenCaptureService : Service() {
             bitmap.copyPixelsFromBuffer(buffer)
             image.close()
 
-            // ML Kit se text pehchanna
+            // 1. Text Recognize karein
             val inputImage = InputImage.fromBitmap(bitmap, 0)
             recognizer.process(inputImage)
                 .addOnSuccessListener { visionText ->
-                    val detectedText = visionText.text
-                    if (detectedText.isNotEmpty()) {
-                        // Abhi ke liye text ko Toast mein dikhayenge
-                        Toast.makeText(this, "Detected: $detectedText", Toast.LENGTH_LONG).show()
-                        // NEXT STEP: Yahan Hindi translation logic aayega
+                    val englishText = visionText.text
+                    if (englishText.isNotEmpty()) {
+                        // 2. Hindi mein Translate karein
+                        translateToHindi(englishText)
                     } else {
-                        Toast.makeText(this, "No text found on screen", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "No English text found!", Toast.LENGTH_SHORT).show()
                     }
                 }
-                .addOnFailureListener {
-                    Toast.makeText(this, "Scanning failed", Toast.LENGTH_SHORT).show()
-                }
         }
+    }
+
+    private fun translateToHindi(text: String) {
+        translator.translate(text)
+            .addOnSuccessListener { hindiText ->
+                // FINAL RESULT: Screen par Hindi dikhana
+                Toast.makeText(this, "Hindi: $hindiText", Toast.LENGTH_LONG).show()
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, "Translation error", Toast.LENGTH_SHORT).show()
+            }
     }
 
     private fun createNotificationChannel() {
@@ -112,5 +136,6 @@ class ScreenCaptureService : Service() {
         super.onDestroy()
         virtualDisplay?.release()
         mediaProjection?.stop()
+        translator.close()
     }
 }
