@@ -1,28 +1,38 @@
 package com.tap.translate
 
+import android.content.Context
 import android.content.Intent
-import android.net.Uri
+import android.media.projection.MediaProjectionManager
 import android.os.Bundle
-import android.provider.Settings
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
+
+    private lateinit var projectionManager: MediaProjectionManager
+    private val REQUEST_CODE = 100
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main) // Ye line error fix karegi
+        setContentView(R.layout.activity_main)
 
-        val btnSettings = findViewById<Button>(R.id.btnSettings)
-        btnSettings?.setOnClickListener {
-            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.parse("package:$packageName"))
-            startActivity(intent)
+        projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+
+        findViewById<Button>(R.id.btnSettings).setOnClickListener {
+            // Screen capture ki permission mangna
+            startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_CODE)
         }
+    }
 
-        if (!Settings.canDrawOverlays(this)) {
-            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName"))
-            startActivityForResult(intent, 123)
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE && resultCode == RESULT_OK) {
+            // Permission milte hi Service ko data bhejna
+            val serviceIntent = Intent(this, ScreenCaptureService::class.java)
+            serviceIntent.putExtra("RESULT_CODE", resultCode)
+            serviceIntent.putExtra("DATA", data)
+            startForegroundService(serviceIntent)
+            finish() // App band ho jayegi par service chalti rahegi
         }
     }
 }
