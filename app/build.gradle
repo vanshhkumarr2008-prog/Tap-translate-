@@ -31,7 +31,7 @@ android {
 }
 
 dependencies {
-    // Baaki lines ke niche ye add karein
-    implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.0'
+    // Pehle wali lines ke niche ye add karein
+    implementation 'com.google.mlkit:translate:17.0.2'
 }
 
