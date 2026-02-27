@@ -1,7 +1,7 @@
 package com.tap.translate
 
+import android.annotation.SuppressLint
 import android.app.*
-import android.content.Context
 import android.content.Intent
 import android.graphics.*
 import android.hardware.display.DisplayManager
@@ -12,8 +12,8 @@ import android.media.projection.MediaProjectionManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.view.Gravity
-import android.view.WindowManager
+import android.view.*
+import android.widget.ImageView
 import android.widget.TextView
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
@@ -28,13 +28,12 @@ class ScreenCaptureService : Service() {
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
     private lateinit var windowManager: WindowManager
-    private var overlayView: TextView? = null
+    
+    private var floatingStar: ImageView? = null
+    private var overlayContainer: FrameLayout? = null
 
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-    private val translator = Translation.getClient(TranslatorOptions.Builder()
-        .setSourceLanguage(TranslateLanguage.ENGLISH)
-        .setTargetLanguage(TranslateLanguage.HINDI)
-        .build())
+    private var targetLangCode = TranslateLanguage.HINDI // Default
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -46,88 +45,147 @@ class ScreenCaptureService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val resultCode = intent?.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED
         val data = intent?.getParcelableExtra<Intent>("DATA")
+        val langStr = intent?.getStringExtra("TARGET_LANG") ?: "Hindi"
+        
+        // Map language string to ML Kit Code
+        targetLangCode = if (langStr == "Arabic") TranslateLanguage.ARABIC else TranslateLanguage.HINDI
 
-        // 1. Silent Notification Setup
+        // 1. Android 14 Notification Fix
         val channel = NotificationChannel("TAP_CHANNEL", "Translator", NotificationManager.IMPORTANCE_MIN)
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
         startForeground(1, Notification.Builder(this, "TAP_CHANNEL")
-            .setSmallIcon(android.R.drawable.btn_star_big_on) // Star Logo
-            .setContentTitle("Tap Translate Pro is Ready")
+            .setSmallIcon(android.R.drawable.btn_star_big_on)
+            .setContentTitle("Magic Star is Active")
             .build())
 
         if (data != null) {
             val projectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             mediaProjection = projectionManager.getMediaProjection(resultCode, data)
-            
-            // 2. Download Hindi Dictionary silently
-            translator.downloadModelIfNeeded().addOnSuccessListener {
-                startScanning()
-            }
+            showFloatingStar()
         }
         return START_STICKY
     }
 
-    private fun startScanning() {
-        val metrics = resources.displayMetrics
-        imageReader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, PixelFormat.RGBA_8888, 2)
-        virtualDisplay = mediaProjection?.createVirtualDisplay("Scan", metrics.widthPixels, metrics.heightPixels, metrics.densityDpi, 
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, imageReader?.surface, null, null)
+    @SuppressLint("ClickableViewAccessibility")
+    private fun showFloatingStar() {
+        floatingStar = ImageView(this).apply {
+            setImageResource(android.R.drawable.btn_star_big_on)
+            layoutParams = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                x = 100
+                y = 100
+            }
+        }
 
-        // Magic: 1 second wait karke screen read karna
-        Handler(Looper.getMainLooper()).postDelayed({ scanScreen() }, 1000)
+        val params = floatingStar?.layoutParams as WindowManager.LayoutParams
+
+        // Drag & Click Logic
+        floatingStar?.setOnTouchListener(object : View.OnTouchListener {
+            private var initialX = 0
+            private var initialY = 0
+            private var initialTouchX = 0f
+            private var initialTouchY = 0f
+
+            override fun onTouch(v: View?, event: MotionEvent): Boolean {
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        initialX = params.x
+                        initialY = params.y
+                        initialTouchX = event.rawX
+                        initialTouchY = event.rawY
+                        return true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        params.x = initialX + (event.rawX - initialTouchX).toInt()
+                        params.y = initialY + (event.rawY - initialTouchY).toInt()
+                        windowManager.updateViewLayout(floatingStar, params)
+                        return true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        val diffX = Math.abs(event.rawX - initialTouchX)
+                        val diffY = Math.abs(event.rawY - initialTouchY)
+                        if (diffX < 10 && diffY < 10) {
+                            startCaptureAndTranslate()
+                        }
+                        return true
+                    }
+                }
+                return false
+            }
+        })
+
+        windowManager.addView(floatingStar, params)
     }
 
-    private fun scanScreen() {
-        val image = imageReader?.acquireLatestImage() ?: return
-        val planes = image.planes
-        val buffer = planes[0].buffer
-        val bitmap = Bitmap.createBitmap(image.width + (planes[0].rowStride - planes[0].pixelStride * image.width) / planes[0].pixelStride, image.height, Bitmap.Config.ARGB_8888)
-        bitmap.copyPixelsFromBuffer(buffer)
-        image.close()
+    private fun startCaptureAndTranslate() {
+        val metrics = resources.displayMetrics
+        imageReader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, PixelFormat.RGBA_8888, 2)
+        virtualDisplay = mediaProjection?.createVirtualDisplay("Scan", metrics.widthPixels, metrics.heightPixels, metrics.densityDpi,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, imageReader?.surface, null, null)
 
+        Handler(Looper.getMainLooper()).postDelayed({
+            val image = imageReader?.acquireLatestImage()
+            if (image != null) {
+                val planes = image.planes
+                val buffer = planes[0].buffer
+                val bitmap = Bitmap.createBitmap(image.width + (planes[0].rowStride - planes[0].pixelStride * image.width) / planes[0].pixelStride, image.height, Bitmap.Config.ARGB_8888)
+                bitmap.copyPixelsFromBuffer(buffer)
+                image.close()
+                processAndShow(bitmap)
+            }
+            virtualDisplay?.release()
+        }, 500)
+    }
+
+    private fun processAndShow(bitmap: Bitmap) {
         recognizer.process(InputImage.fromBitmap(bitmap, 0)).addOnSuccessListener { visionText ->
-            if (visionText.text.isNotEmpty()) {
-                translator.translate(visionText.text).addOnSuccessListener { translated ->
-                    showSmartOverlay(translated) // Professional Overlay
+            val translator = Translation.getClient(TranslatorOptions.Builder()
+                .setSourceLanguage(TranslateLanguage.ENGLISH)
+                .setTargetLanguage(targetLangCode).build())
+
+            translator.downloadModelIfNeeded().addOnSuccessListener {
+                overlayContainer = FrameLayout(this)
+                val fullParams = WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                    PixelFormat.TRANSLUCENT
+                )
+
+                for (block in visionText.textBlocks) {
+                    translator.translate(block.text).addOnSuccessListener { translatedText ->
+                        val tv = TextView(this).apply {
+                            text = translatedText
+                            setBackgroundColor(Color.BLACK)
+                            setTextColor(Color.WHITE)
+                            textSize = 14f
+                            val rect = block.boundingBox
+                            x = rect?.left?.toFloat() ?: 0f
+                            y = rect?.top?.toFloat() ?: 0f
+                        }
+                        overlayContainer?.addView(tv)
+                    }
                 }
+                
+                overlayContainer?.setOnClickListener { 
+                    windowManager.removeView(overlayContainer)
+                    overlayContainer = null
+                }
+                windowManager.addView(overlayContainer, fullParams)
             }
         }
     }
 
-    private fun showSmartOverlay(text: String) {
-        removeOldOverlay()
-
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
-        )
-        params.gravity = Gravity.CENTER
-
-        overlayView = TextView(this).apply {
-            this.text = text
-            this.setTextColor(Color.YELLOW) // High Visibility
-            this.textSize = 24f
-            this.setShadowLayer(5f, 0f, 0f, Color.BLACK)
-            this.setPadding(40, 40, 40, 40)
-            this.setBackgroundColor(Color.parseColor("#99000000")) // Smart Dark Glass
-            this.gravity = Gravity.CENTER
-            this.setOnClickListener { removeOldOverlay() } // Tap to Close
-        }
-
-        windowManager.addView(overlayView, params)
-    }
-
-    private fun removeOldOverlay() {
-        overlayView?.let { windowManager.removeView(it); overlayView = null }
-    }
-
     override fun onDestroy() {
         super.onDestroy()
-        removeOldOverlay()
-        virtualDisplay?.release()
+        floatingStar?.let { windowManager.removeView(it) }
         mediaProjection?.stop()
     }
 }
