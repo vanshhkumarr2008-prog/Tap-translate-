@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
+import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.Spinner
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
@@ -19,8 +21,11 @@ class MainActivity : AppCompatActivity() {
 
         projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
+        val spinner = findViewById<Spinner>(R.id.langSpinner)
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, arrayOf("English ➔ Hindi"))
+        spinner.adapter = adapter
+
         findViewById<Button>(R.id.btnSettings).setOnClickListener {
-            // Permission mangne ka professional tarika
             startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_CODE)
         }
     }
@@ -32,8 +37,7 @@ class MainActivity : AppCompatActivity() {
             serviceIntent.putExtra("RESULT_CODE", resultCode)
             serviceIntent.putExtra("DATA", data)
             startForegroundService(serviceIntent)
-            
-            Toast.makeText(this, "Magic Active! Use Star 🌟 in Quick Settings", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Star 🌟 is now Active!", Toast.LENGTH_SHORT).show()
         }
     }
 }
