@@ -14,7 +14,7 @@ import androidx.appcompat.app.AppCompatActivity
 class MainActivity : AppCompatActivity() {
 
     private lateinit var projectionManager: MediaProjectionManager
-    private val REQUEST_CODE = 1000 // Aapka code 1000 use kar raha tha
+    private val REQUEST_CODE = 1000 
     private var selectedLanguage = "Hindi"
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,11 +57,14 @@ class MainActivity : AppCompatActivity() {
             val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
                 putExtra("RESULT_CODE", resultCode)
                 putExtra("DATA", data)
-                putExtra("TARGET_LANG", selectedLanguage) // Language pass kar rahe hain
+                putExtra("TARGET_LANG", selectedLanguage)
             }
             startForegroundService(serviceIntent)
             
-            Toast.makeText(this, "Star 🌟 is now Active!", Toast.LENGTH_SHORT).show()
+            // 🔥 YE HAI WO MAGIC LINE (App minimize ho jayegi aur Star dikhne lagega)
+            moveTaskToBack(true) 
+            
+            Toast.makeText(this, "$selectedLanguage Star 🌟 is now Active!", Toast.LENGTH_SHORT).show()
         }
     }
 }
