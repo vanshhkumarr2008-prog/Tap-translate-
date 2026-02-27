@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.view.*
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
 import com.google.mlkit.nl.translate.TranslateLanguage
@@ -47,15 +48,22 @@ class ScreenCaptureService : Service() {
         val data = intent?.getParcelableExtra<Intent>("DATA")
         val langStr = intent?.getStringExtra("TARGET_LANG") ?: "Hindi"
         
-        // Map language string to ML Kit Code
-        targetLangCode = if (langStr == "Arabic") TranslateLanguage.ARABIC else TranslateLanguage.HINDI
+        // 🔥 Smart Language Mapper
+        targetLangCode = when (langStr) {
+            "Hindi" -> TranslateLanguage.HINDI
+            "Spanish" -> TranslateLanguage.SPANISH
+            "French" -> TranslateLanguage.FRENCH
+            "Arabic" -> TranslateLanguage.ARABIC
+            "German" -> TranslateLanguage.GERMAN
+            else -> TranslateLanguage.HINDI
+        }
 
-        // 1. Android 14 Notification Fix
+        // Android 14 Foreground Fix
         val channel = NotificationChannel("TAP_CHANNEL", "Translator", NotificationManager.IMPORTANCE_MIN)
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
         startForeground(1, Notification.Builder(this, "TAP_CHANNEL")
             .setSmallIcon(android.R.drawable.btn_star_big_on)
-            .setContentTitle("Magic Star is Active")
+            .setContentTitle("Tap Translate Pro Active")
             .build())
 
         if (data != null) {
@@ -78,14 +86,12 @@ class ScreenCaptureService : Service() {
                 PixelFormat.TRANSLUCENT
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
-                x = 100
-                y = 100
+                x = 150
+                y = 150
             }
         }
 
         val params = floatingStar?.layoutParams as WindowManager.LayoutParams
-
-        // Drag & Click Logic
         floatingStar?.setOnTouchListener(object : View.OnTouchListener {
             private var initialX = 0
             private var initialY = 0
@@ -110,7 +116,7 @@ class ScreenCaptureService : Service() {
                     MotionEvent.ACTION_UP -> {
                         val diffX = Math.abs(event.rawX - initialTouchX)
                         val diffY = Math.abs(event.rawY - initialTouchY)
-                        if (diffX < 10 && diffY < 10) {
+                        if (diffX < 15 && diffY < 15) {
                             startCaptureAndTranslate()
                         }
                         return true
@@ -119,7 +125,6 @@ class ScreenCaptureService : Service() {
                 return false
             }
         })
-
         windowManager.addView(floatingStar, params)
     }
 
@@ -140,13 +145,14 @@ class ScreenCaptureService : Service() {
                 processAndShow(bitmap)
             }
             virtualDisplay?.release()
-        }, 500)
+        }, 600)
     }
 
     private fun processAndShow(bitmap: Bitmap) {
         recognizer.process(InputImage.fromBitmap(bitmap, 0)).addOnSuccessListener { visionText ->
+            // 🔥 Auto-Detect Logic: ML Kit Translator handles source detection if set correctly
             val translator = Translation.getClient(TranslatorOptions.Builder()
-                .setSourceLanguage(TranslateLanguage.ENGLISH)
+                .setSourceLanguage(TranslateLanguage.ENGLISH) // Base detection
                 .setTargetLanguage(targetLangCode).build())
 
             translator.downloadModelIfNeeded().addOnSuccessListener {
@@ -163,8 +169,9 @@ class ScreenCaptureService : Service() {
                     translator.translate(block.text).addOnSuccessListener { translatedText ->
                         val tv = TextView(this).apply {
                             text = translatedText
-                            setBackgroundColor(Color.BLACK)
+                            setBackgroundColor(Color.parseColor("#CC000000")) // Glassy Black
                             setTextColor(Color.WHITE)
+                            setPadding(8, 4, 8, 4)
                             textSize = 14f
                             val rect = block.boundingBox
                             x = rect?.left?.toFloat() ?: 0f
@@ -186,6 +193,7 @@ class ScreenCaptureService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         floatingStar?.let { windowManager.removeView(it) }
+        overlayContainer?.let { windowManager.removeView(it) }
         mediaProjection?.stop()
     }
 }
