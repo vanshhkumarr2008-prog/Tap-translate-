@@ -12,29 +12,49 @@ import androidx.appcompat.app.AppCompatActivity
 class MainActivity : AppCompatActivity() {
 
     private lateinit var projectionManager: MediaProjectionManager
-    private val REQUEST_CODE = 100
+    private val REQUEST_CODE = 1000
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        projectionManager =
+            getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
         findViewById<Button>(R.id.btnSettings).setOnClickListener {
-            startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_CODE)
+            startActivityForResult(
+                projectionManager.createScreenCaptureIntent(),
+                REQUEST_CODE
+            )
         }
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    override fun onActivityResult(
+        requestCode: Int,
+        resultCode: Int,
+        data: Intent?
+    ) {
         super.onActivityResult(requestCode, resultCode, data)
 
-        if (requestCode == REQUEST_CODE && resultCode == Activity.RESULT_OK && data != null) {
+        if (requestCode == REQUEST_CODE &&
+            resultCode == Activity.RESULT_OK &&
+            data != null
+        ) {
+
             val serviceIntent = Intent(this, ScreenCaptureService::class.java)
             serviceIntent.putExtra("RESULT_CODE", resultCode)
             serviceIntent.putExtra("DATA", data)
+
             startForegroundService(serviceIntent)
 
-            Toast.makeText(this, "Star 🌟 is now Active!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                this,
+                "Star 🌟 is now Active!",
+                Toast.LENGTH_SHORT
+            ).show()
+
+            // ❌ Yaha finish() nahi lagana
+            // Isliye app close nahi hogi
         }
     }
 }
