@@ -30,7 +30,7 @@ class ScreenCaptureService : Service() {
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
     private lateinit var windowManager: WindowManager
-    private var overlayView: TextView? = null
+    private var resultView: TextView? = null
 
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     private val translator = Translation.getClient(TranslatorOptions.Builder()
@@ -49,36 +49,34 @@ class ScreenCaptureService : Service() {
         val resultCode = intent?.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED
         val data = intent?.getParcelableExtra<Intent>("DATA")
 
-        createNotificationChannel()
-        val notification = Notification.Builder(this, "TAP_CHANNEL")
-            .setContentTitle("Tap Translate Pro Running")
-            .setSmallIcon(android.R.drawable.ic_menu_search)
-            .build()
-        startForeground(1, notification)
+        // 1. Notification ko Silent banana
+        createSilentNotification()
 
         if (data != null) {
             val projectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             mediaProjection = projectionManager.getMediaProjection(resultCode, data)
             
-            // Step 1: Dictionary download check
+            // Model download hone ke baad scan shuru karein
             translator.downloadModelIfNeeded().addOnSuccessListener {
-                startScanningProcess()
+                startScreenCapture()
+            }.addOnFailureListener {
+                Toast.makeText(this, "Language model download failed!", Toast.LENGTH_SHORT).show()
             }
         }
         return START_STICKY
     }
 
-    private fun startScanningProcess() {
+    private fun startScreenCapture() {
         val metrics = resources.displayMetrics
         imageReader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, PixelFormat.RGBA_8888, 2)
         virtualDisplay = mediaProjection?.createVirtualDisplay("Scan", metrics.widthPixels, metrics.heightPixels, metrics.densityDpi, 
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, imageReader?.surface, null, null)
 
-        // 1 second baad screen capture karke translate karna
-        Handler(Looper.getMainLooper()).postDelayed({ scanScreenNow() }, 1000)
+        // 1 second baad screen scan karna
+        Handler(Looper.getMainLooper()).postDelayed({ scanNow() }, 1000)
     }
 
-    private fun scanScreenNow() {
+    private fun scanNow() {
         val image = imageReader?.acquireLatestImage() ?: return
         val planes = image.planes
         val buffer = planes[0].buffer
@@ -89,16 +87,17 @@ class ScreenCaptureService : Service() {
         recognizer.process(InputImage.fromBitmap(bitmap, 0)).addOnSuccessListener { visionText ->
             if (visionText.text.isNotEmpty()) {
                 translator.translate(visionText.text).addOnSuccessListener { hindiText ->
-                    showProfessionalResult(hindiText)
+                    showResultOnScreen(hindiText)
                 }
             } else {
-                Toast.makeText(this, "No English text found on screen", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "No text found to translate", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
-    private fun showProfessionalResult(text: String) {
-        removeOldOverlay()
+    private fun showResultOnScreen(text: String) {
+        // Purana result hatao
+        if (resultView != null) windowManager.removeView(resultView)
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -107,34 +106,40 @@ class ScreenCaptureService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         )
-        params.gravity = Gravity.BOTTOM // Result niche dikhega
-        params.y = 100
-
-        overlayView = TextView(this).apply {
+        params.gravity = Gravity.CENTER
+        
+        // Professional Result Box
+        resultView = TextView(this).apply {
             this.text = text
-            this.setPadding(50, 50, 50, 50)
-            this.setBackgroundColor(Color.parseColor("#E6000000")) // Dark Glass Look
+            this.setPadding(40, 60, 40, 60)
+            this.setBackgroundColor(Color.parseColor("#EE000000")) // Premium Dark
             this.setTextColor(Color.WHITE)
             this.textSize = 20f
             this.gravity = Gravity.CENTER
-            this.setOnClickListener { removeOldOverlay() } // Tap to close
+            this.setOnClickListener { 
+                windowManager.removeView(this)
+                resultView = null
+            }
         }
-
-        windowManager.addView(overlayView, params)
+        windowManager.addView(resultView, params)
     }
 
-    private fun removeOldOverlay() {
-        overlayView?.let { windowManager.removeView(it); overlayView = null }
-    }
+    private fun createSilentNotification() {
+        val channelId = "TAP_CHANNEL"
+        val channel = NotificationChannel(channelId, "Translator", NotificationManager.IMPORTANCE_MIN)
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
 
-    private fun createNotificationChannel() {
-        val channel = NotificationChannel("TAP_CHANNEL", "Translate", NotificationManager.IMPORTANCE_LOW)
-        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
+        val notification = Notification.Builder(this, channelId)
+            .setContentTitle("Tap Translate Active")
+            .setSmallIcon(android.R.drawable.ic_menu_search)
+            .setOngoing(true)
+            .build()
+        startForeground(1, notification)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        removeOldOverlay()
         virtualDisplay?.release()
         mediaProjection?.stop()
     }
