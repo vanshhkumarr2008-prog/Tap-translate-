@@ -1,95 +1,18 @@
-package com.tap.translate
+override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    super.onActivityResult(requestCode, resultCode, data)
 
-import android.Manifest
-import android.app.Activity
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.media.projection.MediaProjectionManager
-import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.provider.Settings
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import android.widget.*
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import androidx.fragment.app.Fragment
+    if (requestCode == REQUEST_CODE && resultCode == Activity.RESULT_OK && data != null) {
 
-class HomeFragment : Fragment() {
-
-    private lateinit var projectionManager: MediaProjectionManager
-    private val REQUEST_CODE = 1000
-    private var selectedLanguage = "Hindi"
-
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        val view = inflater.inflate(R.layout.fragment_home, container, false)
-
-        val spinner = view.findViewById<Spinner>(R.id.languageSpinner)
-        val btnActivate = view.findViewById<Button>(R.id.btnActivate)
-
-        projectionManager = requireContext().getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-
-        val languages = arrayOf("Hindi", "Spanish", "French", "Arabic", "German")
-        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, languages)
-        spinner.adapter = adapter
-
-        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, v: View?, pos: Int, id: Long) {
-                selectedLanguage = languages[pos]
-            }
-            override fun onNothingSelected(p0: AdapterView<*>?) {}
+        val serviceIntent = Intent(requireContext(), ScreenCaptureService::class.java).apply {
+            putExtra("RESULT_CODE", resultCode)
+            putExtra("DATA", data)
+            putExtra("TARGET_LANG", selectedLanguage)
         }
 
-        btnActivate.setOnClickListener {
-            checkPermissionsAndStart()
-        }
-        return view
-    }
+        ContextCompat.startForegroundService(requireContext(), serviceIntent)
 
-    private fun checkPermissionsAndStart() {
-        // 1. Overlay Permission Check
-        if (!Settings.canDrawOverlays(requireContext())) {
-            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${requireContext().packageName}"))
-            startActivity(intent)
-            return
-        }
+        Toast.makeText(requireContext(), "Magic Star 🌟 Ready!", Toast.LENGTH_SHORT).show()
 
-        // 2. Notification Permission Check (Android 13+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(requireActivity(), arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
-                return
-            }
-        }
-
-        // 3. Start Screen Capture Intent
-        startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_CODE)
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_CODE && resultCode == Activity.RESULT_OK && data != null) {
-            
-            val serviceIntent = Intent(requireContext(), ScreenCaptureService::class.java).apply {
-                putExtra("RESULT_CODE", resultCode)
-                putExtra("DATA", data)
-                putExtra("TARGET_LANG", selectedLanguage)
-            }
-            
-            // Service start karo
-            requireContext().startForegroundService(serviceIntent)
-            
-            Toast.makeText(requireContext(), "Magic Star 🌟 Ready!", Toast.LENGTH_SHORT).show()
-
-            // App ko 1 second baad background mein bhejo (Crash fix) ✅
-            Handler(Looper.getMainLooper()).postDelayed({
-                activity?.moveTaskToBack(true)
-            }, 1000)
-        }
+        // ❌ moveTaskToBack REMOVE
     }
 }
