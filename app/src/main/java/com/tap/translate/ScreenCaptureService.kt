@@ -48,7 +48,7 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // 1. Crash rokne ke liye sabse pehle Notification setup ✅
+        // --- STEP 1: INSTANT FOREGROUND (Crash se bachne ke liye) --- ✅
         val channelId = "TAP_PRO_CHANNEL"
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channel = NotificationChannel(channelId, "Tap Translate", NotificationManager.IMPORTANCE_LOW)
@@ -60,18 +60,24 @@ class ScreenCaptureService : Service() {
             .setSmallIcon(android.R.drawable.btn_star_big_on)
             .build()
 
+        // Android 14+ rules ke liye ye line sabse pehle call honi chahiye
         startForeground(1, notification)
 
-        // 2. Action check karo (Notification se tap ya App se) ✨
+        // --- STEP 2: SIGNAL HANDLING --- ✨
         val action = intent?.action ?: intent?.getStringExtra("ACTION")
         
         if (action == "MAGIC_TAP") {
-            // Notification Panel band hone ka wait karo aur scan shuru karo
-            Handler(Looper.getMainLooper()).postDelayed({
-                startCaptureAndTranslate() 
-            }, 500)
+            // Notification Tile se signal aaya
+            if (mediaProjection != null) {
+                // Thoda sa delay taaki notification panel band hone ka waqt mile
+                Handler(Looper.getMainLooper()).postDelayed({
+                    startCaptureAndTranslate() 
+                }, 600)
+            } else {
+                Toast.makeText(this, "Please Activate from App first!", Toast.LENGTH_SHORT).show()
+            }
         } else {
-            // Dashboard se data receive karo
+            // App ke "Activate" button se data aaya
             val resultCode = intent?.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED
             val data = intent?.getParcelableExtra<Intent>("DATA")
             val langStr = intent?.getStringExtra("TARGET_LANG") ?: "Hindi"
@@ -86,7 +92,10 @@ class ScreenCaptureService : Service() {
 
             if (data != null) {
                 val projectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                // Permission token ko save kar rahe hain taaki tile service use kar sake
                 mediaProjection = projectionManager.getMediaProjection(resultCode, data)
+                
+                // Floating star dikhao (optional, agar sirf notification chahiye toh ise comment kar sakte ho)
                 showFloatingStar()
             }
         }
@@ -96,12 +105,10 @@ class ScreenCaptureService : Service() {
     @SuppressLint("ClickableViewAccessibility")
     private fun showFloatingStar() {
         if (floatingStar != null) return
-
         floatingStar = ImageView(this).apply {
             setImageResource(android.R.drawable.btn_star_big_on)
             setBackgroundResource(android.R.drawable.editbox_dropdown_dark_frame)
         }
-
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -110,43 +117,31 @@ class ScreenCaptureService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 200
-            y = 500
+            x = 200; y = 500
         }
-
         floatingStar?.setOnTouchListener(object : View.OnTouchListener {
-            private var initialX = 0
-            private var initialY = 0
-            private var initialTouchX = 0f
-            private var initialTouchY = 0f
+            private var initialX = 0; private var initialY = 0
+            private var initialTouchX = 0f; private var initialTouchY = 0f
             private var isMoving = false
-
             override fun onTouch(v: View?, event: MotionEvent): Boolean {
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
-                        initialX = params.x
-                        initialY = params.y
-                        initialTouchX = event.rawX
-                        initialTouchY = event.rawY
-                        isMoving = false
-                        return true
+                        initialX = params.x; initialY = params.y
+                        initialTouchX = event.rawX; initialTouchY = event.rawY
+                        isMoving = false; return true
                     }
                     MotionEvent.ACTION_MOVE -> {
                         val dx = (event.rawX - initialTouchX).toInt()
                         val dy = (event.rawY - initialTouchY).toInt()
                         if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-                            params.x = initialX + dx
-                            params.y = initialY + dy
+                            params.x = initialX + dx; params.y = initialY + dy
                             windowManager.updateViewLayout(floatingStar, params)
                             isMoving = true
                         }
                         return true
                     }
                     MotionEvent.ACTION_UP -> {
-                        if (!isMoving) {
-                            Toast.makeText(this@ScreenCaptureService, "Magic Scanning... ✨", Toast.LENGTH_SHORT).show()
-                            startCaptureAndTranslate()
-                        }
+                        if (!isMoving) startCaptureAndTranslate()
                         return true
                     }
                 }
@@ -168,16 +163,11 @@ class ScreenCaptureService : Service() {
         Handler(Looper.getMainLooper()).postDelayed({
             val image = imageReader?.acquireLatestImage()
             if (image != null) {
-                val planes = image.planes
-                val buffer = planes[0].buffer
-                val pixelStride = planes[0].pixelStride
-                val rowStride = planes[0].rowStride
+                val buffer = image.planes[0].buffer
+                val pixelStride = image.planes[0].pixelStride
+                val rowStride = image.planes[0].rowStride
                 val rowPadding = rowStride - pixelStride * image.width
-                
-                val bitmap = Bitmap.createBitmap(
-                    image.width + rowPadding / pixelStride,
-                    image.height, Bitmap.Config.ARGB_8888
-                )
+                val bitmap = Bitmap.createBitmap(image.width + rowPadding / pixelStride, image.height, Bitmap.Config.ARGB_8888)
                 bitmap.copyPixelsFromBuffer(buffer)
                 image.close()
                 processAndShow(bitmap)
@@ -189,55 +179,41 @@ class ScreenCaptureService : Service() {
     private fun processAndShow(bitmap: Bitmap) {
         val inputImage = InputImage.fromBitmap(bitmap, 0)
         recognizer.process(inputImage).addOnSuccessListener { visionText ->
-            
             val options = TranslatorOptions.Builder()
                 .setSourceLanguage(TranslateLanguage.ENGLISH)
                 .setTargetLanguage(targetLangCode)
                 .build()
-            
             val translator = Translation.getClient(options)
-
             translator.downloadModelIfNeeded().addOnSuccessListener {
-                if (overlayContainer != null) {
-                    windowManager.removeView(overlayContainer)
-                    overlayContainer = null
-                }
-
+                overlayContainer?.let { windowManager.removeView(it) }
                 overlayContainer = FrameLayout(this)
                 val fullParams = WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                    WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                     PixelFormat.TRANSLUCENT
                 )
-
                 for (block in visionText.textBlocks) {
                     translator.translate(block.text).addOnSuccessListener { translatedText ->
                         dbHelper.insertHistory(block.text, translatedText)
-
                         val tv = TextView(this).apply {
                             text = translatedText
                             setTextColor(Color.YELLOW)
                             setBackgroundColor(Color.parseColor("#99000000"))
                             setPadding(10, 5, 10, 5)
                             textSize = 14f
-                            val rect = block.boundingBox
-                            x = rect?.left?.toFloat() ?: 0f
-                            y = rect?.top?.toFloat() ?: 0f
+                            x = block.boundingBox?.left?.toFloat() ?: 0f
+                            y = block.boundingBox?.top?.toFloat() ?: 0f
                         }
                         overlayContainer?.addView(tv)
                     }
                 }
-
                 overlayContainer?.setOnClickListener {
                     windowManager.removeView(overlayContainer)
                     overlayContainer = null
                 }
-                
                 windowManager.addView(overlayContainer, fullParams)
             }.addOnFailureListener {
-                Toast.makeText(this, "Language model download failed!", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Download Model Failed!", Toast.LENGTH_SHORT).show()
             }
         }
     }
