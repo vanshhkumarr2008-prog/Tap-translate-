@@ -34,9 +34,12 @@ class MainActivity : AppCompatActivity() {
                     true
                 }
                 R.id.nav_settings -> {
-                    // Abhi ke liye settings khali rakhte hain
-                    true
-                }
+    supportFragmentManager.beginTransaction()
+        .replace(R.id.fragment_container, SettingsFragment())
+        .commit()
+    true
+}
+
                 else -> false
             }
         }
