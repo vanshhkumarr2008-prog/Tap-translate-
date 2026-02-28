@@ -2,7 +2,6 @@ package com.tap.translate
 
 import android.annotation.SuppressLint
 import android.app.*
-import android.content.Context
 import android.content.Intent
 import android.graphics.*
 import android.hardware.display.DisplayManager
@@ -28,13 +27,14 @@ class ScreenCaptureService : Service() {
     private var imageReader: ImageReader? = null
     private lateinit var windowManager: WindowManager
 
-    private val dbHelper: DatabaseHelper by lazy {
-        DatabaseHelper(applicationContext)
-    }
+    private val dbHelper by lazy { DatabaseHelper(applicationContext) }
 
     private var floatingStar: ImageView? = null
     private var overlayContainer: FrameLayout? = null
-    private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+
+    private val recognizer =
+        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+
     private var targetLangCode = TranslateLanguage.HINDI
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -46,35 +46,44 @@ class ScreenCaptureService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
 
-        showNotification()
+        showNotification() // MUST be first for Android 14
 
-        val action = intent?.action
+        if (intent == null) return START_STICKY
 
-        if (action == "MAGIC_TAP") {
+        if (intent.action == "MAGIC_TAP") {
 
-            if (mediaProjection != null) {
-                Handler(Looper.getMainLooper()).postDelayed({
-                    startCaptureAndTranslate()
-                }, 600)
-            } else {
-                Toast.makeText(this, "Please activate from app first!", Toast.LENGTH_SHORT).show()
+            if (mediaProjection == null) {
+                Toast.makeText(this, "Activate from app first!", Toast.LENGTH_SHORT).show()
+                return START_STICKY
             }
+
+            Handler(Looper.getMainLooper()).postDelayed({
+                startCaptureAndTranslate()
+            }, 400)
 
         } else {
 
             val resultCode =
-                intent?.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED)
-                    ?: Activity.RESULT_CANCELED
+                intent.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED)
 
-            val data = intent?.getParcelableExtra<Intent>("DATA")
-            val langStr = intent?.getStringExtra("TARGET_LANG") ?: "Hindi"
+            val data = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra("DATA", Intent::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra("DATA")
+            }
 
+            val langStr = intent.getStringExtra("TARGET_LANG") ?: "Hindi"
             targetLangCode = getLangCode(langStr)
 
-            if (data != null) {
+            if (data != null && resultCode == Activity.RESULT_OK) {
+
                 val projectionManager =
                     getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                mediaProjection = projectionManager.getMediaProjection(resultCode, data)
+
+                mediaProjection =
+                    projectionManager.getMediaProjection(resultCode, data)
+
                 showFloatingStar()
             }
         }
@@ -92,8 +101,8 @@ class ScreenCaptureService : Service() {
                 "Tap Translate Service",
                 NotificationManager.IMPORTANCE_LOW
             )
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+            getSystemService(NotificationManager::class.java)
+                .createNotificationChannel(channel)
         }
 
         val notification = NotificationCompat.Builder(this, channelId)
@@ -135,17 +144,16 @@ class ScreenCaptureService : Service() {
             y = 500
         }
 
-        floatingStar?.setOnTouchListener { _, event ->
-            if (event.action == MotionEvent.ACTION_UP) {
-                startCaptureAndTranslate()
-            }
-            true
+        floatingStar?.setOnClickListener {
+            startCaptureAndTranslate()
         }
 
         windowManager.addView(floatingStar, params)
     }
 
     private fun startCaptureAndTranslate() {
+
+        if (mediaProjection == null) return
 
         val metrics = resources.displayMetrics
 
@@ -175,12 +183,9 @@ class ScreenCaptureService : Service() {
 
                 val plane = image.planes[0]
                 val buffer = plane.buffer
-                val pixelStride = plane.pixelStride
-                val rowStride = plane.rowStride
-                val rowPadding = rowStride - pixelStride * image.width
 
                 val bitmap = Bitmap.createBitmap(
-                    image.width + rowPadding / pixelStride,
+                    image.width,
                     image.height,
                     Bitmap.Config.ARGB_8888
                 )
@@ -192,8 +197,9 @@ class ScreenCaptureService : Service() {
             }
 
             virtualDisplay?.release()
+            imageReader?.close()
 
-        }, 500)
+        }, 300)
     }
 
     private fun processAndShow(bitmap: Bitmap) {
@@ -228,12 +234,12 @@ class ScreenCaptureService : Service() {
                         for (block in visionText.textBlocks) {
 
                             translator.translate(block.text)
-                                .addOnSuccessListener { translatedText ->
+                                .addOnSuccessListener { translated ->
 
-                                    dbHelper.insertHistory(block.text, translatedText)
+                                    dbHelper.insertHistory(block.text, translated)
 
                                     val tv = TextView(this).apply {
-                                        text = translatedText
+                                        text = translated
                                         setTextColor(Color.YELLOW)
                                         setBackgroundColor(Color.parseColor("#99000000"))
                                         textSize = 16f
