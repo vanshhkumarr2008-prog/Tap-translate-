@@ -1,36 +1,21 @@
 package com.tap.translate
 
 import android.content.Intent
-import android.os.Build
 import android.service.quicksettings.TileService
-import android.util.Log
 
 class MagicTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
 
-        // 1️⃣ Notification panel close (Safe for all versions)
-        try {
-            val closeIntent = Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
-            sendBroadcast(closeIntent)
-        } catch (e: Exception) {
-            Log.e("MagicTile", "Panel close error", e)
-        }
+        // Close notification panel
+        sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS))
 
-        // 2️⃣ Start ScreenCaptureService
-        try {
-            val serviceIntent = Intent(this, ScreenCaptureService::class.java)
-            serviceIntent.action = "MAGIC_TAP"
+        // Open MainActivity safely
+        val intent = Intent(this, MainActivity::class.java)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        intent.putExtra("FROM_TILE", true)
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent)
-            } else {
-                startService(serviceIntent)
-            }
-
-        } catch (e: Exception) {
-            Log.e("MagicTile", "Service start error", e)
-        }
+        startActivityAndCollapse(intent)
     }
 }
