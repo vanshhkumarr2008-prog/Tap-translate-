@@ -20,7 +20,6 @@ class HomeFragment : Fragment() {
     private var selectedLanguage = "Hindi"
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        // fragment_home.xml ko load karega
         val view = inflater.inflate(R.layout.fragment_home, container, false)
 
         val spinner = view.findViewById<Spinner>(R.id.languageSpinner)
@@ -28,7 +27,6 @@ class HomeFragment : Fragment() {
 
         projectionManager = requireContext().getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
-        // Spinner Setup (Target Languages)
         val languages = arrayOf("Hindi", "Spanish", "French", "Arabic", "German")
         val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, languages)
         spinner.adapter = adapter
@@ -41,12 +39,10 @@ class HomeFragment : Fragment() {
         }
 
         btnActivate.setOnClickListener {
-            // 1. Check karo Display Over Other Apps ki permission hai ya nahi
             if (!Settings.canDrawOverlays(requireContext())) {
                 val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${requireContext().packageName}"))
                 startActivity(intent)
             } else {
-                // 2. Screen Capture (Media Projection) ki permission maango
                 startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_CODE)
             }
         }
@@ -55,20 +51,20 @@ class HomeFragment : Fragment() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        
         if (requestCode == REQUEST_CODE && resultCode == Activity.RESULT_OK && data != null) {
-            // 3. Permission milte hi ScreenCaptureService ko start karo
+            
+            // Service start karne ka sahi tarika ✅
             val serviceIntent = Intent(requireContext(), ScreenCaptureService::class.java).apply {
                 putExtra("RESULT_CODE", resultCode)
                 putExtra("DATA", data)
                 putExtra("TARGET_LANG", selectedLanguage)
             }
             requireContext().startForegroundService(serviceIntent)
-
-            // User ko batao ki ab Magic Tile taiyaar hai ✅
+            
+            // Instruction Toast
             Toast.makeText(requireContext(), "Magic Star 🌟 Ready! Ab Notification Panel se use karein.", Toast.LENGTH_LONG).show()
-
-            // App ko background mein bhej do taaki user dusri apps use kar sake
+            
+            // App ko background mein bhej do
             activity?.moveTaskToBack(true)
         }
     }
