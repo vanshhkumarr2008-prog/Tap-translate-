@@ -10,26 +10,19 @@ class MagicTileService : TileService() {
     override fun onClick() {
         super.onClick()
 
+        // 1️⃣ Notification panel close (Safe for all versions)
         try {
-            // Android 12+ ke liye proper tarika
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                // System panel safely collapse hota hai
-                collapsePanels()
-            } else {
-                // Purane Android ke liye fallback
-                val closeIntent = Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
-                sendBroadcast(closeIntent)
-            }
+            val closeIntent = Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
+            sendBroadcast(closeIntent)
         } catch (e: Exception) {
-            Log.e("MagicTile", "Panel collapse error", e)
+            Log.e("MagicTile", "Panel close error", e)
         }
 
+        // 2️⃣ Start ScreenCaptureService
         try {
-            val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
-                action = "MAGIC_TAP"
-            }
+            val serviceIntent = Intent(this, ScreenCaptureService::class.java)
+            serviceIntent.action = "MAGIC_TAP"
 
-            // Android O+ me foreground service zaroori
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent)
             } else {
