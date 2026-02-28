@@ -21,9 +21,16 @@
         </activity>
 
         <service
-            android:name=".ScreenCaptureService"
-            android:foregroundServiceType="mediaProjection"
-            android:exported="false"/>
+    android:name=".MagicTileService"
+    android:exported="true"
+    android:label="Magic Star 🌟"
+    android:icon="@android:drawable/btn_star_big_on"
+    android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+    <intent-filter>
+        <action android:name="android.service.quicksettings.action.QS_TILE" />
+    </intent-filter>
+</service>
+
 
     </application>
 </manifest>
