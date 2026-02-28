@@ -32,6 +32,9 @@ class ScreenCaptureService : Service() {
     private var imageReader: ImageReader? = null
     private lateinit var windowManager: WindowManager
     
+    // 1. DATABASE HELPER KA VARIABLE ADD KIYA ✅
+    private lateinit var dbHelper: DatabaseHelper
+    
     private var floatingStar: ImageView? = null
     private var overlayContainer: FrameLayout? = null
 
@@ -43,6 +46,8 @@ class ScreenCaptureService : Service() {
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        // 2. DATABASE KO INITIALIZE KIYA ✅
+        dbHelper = DatabaseHelper(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -58,7 +63,6 @@ class ScreenCaptureService : Service() {
             else -> TranslateLanguage.HINDI
         }
 
-        // Notification Setup
         val channelId = "TAP_PRO_CHANNEL"
         val channel = NotificationChannel(channelId, "Tap Translate", NotificationManager.IMPORTANCE_LOW)
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -86,7 +90,7 @@ class ScreenCaptureService : Service() {
 
         floatingStar = ImageView(this).apply {
             setImageResource(android.R.drawable.btn_star_big_on)
-            setBackgroundResource(android.R.drawable.editbox_dropdown_dark_frame) // Thoda glow ke liye
+            setBackgroundResource(android.R.drawable.editbox_dropdown_dark_frame)
         }
 
         val params = WindowManager.LayoutParams(
@@ -201,6 +205,10 @@ class ScreenCaptureService : Service() {
 
                 for (block in visionText.textBlocks) {
                     translator.translate(block.text).addOnSuccessListener { translatedText ->
+                        
+                        // 3. HISTORY MEIN SAVE KARNE KA LOGIC ADD KIYA ✅
+                        dbHelper.insertHistory(block.text, translatedText)
+
                         val tv = TextView(this).apply {
                             text = translatedText
                             setTextColor(Color.YELLOW)
