@@ -1,25 +1,21 @@
 package com.tap.translate
 
-import android.service.quicksettings.Tile
-import android.service.quicksettings.TileService
 import android.content.Intent
+import android.service.quicksettings.TileService
 
 class MagicTileService : TileService() {
 
-    // Jab user Notification bar mein button dekhega
-    override fun onStartListening() {
-        super.onStartListening()
-        val tile = qsTile
-        tile.state = Tile.STATE_ACTIVE
-        tile.updateTile()
-    }
-
-    // Jab user icon par click karega
     override fun onClick() {
         super.onClick()
-        // App khul jayegi taaki user translate start kar sake
-        val intent = Intent(this, MainActivity::class.java)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivityAndCollapse(intent)
+
+        // 1. Notification bar ko turant band karo ✅
+        val closeIntent = Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
+        sendBroadcast(closeIntent)
+
+        // 2. ScreenCaptureService ko "MAGIC_TAP" ka signal bhejo ✅
+        val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
+            action = "MAGIC_TAP"
+        }
+        startForegroundService(serviceIntent)
     }
 }
