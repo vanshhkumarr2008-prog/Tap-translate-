@@ -47,18 +47,31 @@ class ScreenCaptureService : Service() {
         dbHelper = DatabaseHelper(this)
     }
 
-    // --- MAGIC LOGIC START --- ✅
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // 1. Crash rokne ke liye sabse pehle Notification setup ✅
+        val channelId = "TAP_PRO_CHANNEL"
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel = NotificationChannel(channelId, "Tap Translate", NotificationManager.IMPORTANCE_LOW)
+        manager.createNotificationChannel(channel)
+
+        val notification = Notification.Builder(this, channelId)
+            .setContentTitle("Magic Star 🌟 Active")
+            .setContentText("Ready to Translate")
+            .setSmallIcon(android.R.drawable.btn_star_big_on)
+            .build()
+
+        startForeground(1, notification)
+
+        // 2. Action check karo (Notification se tap ya App se) ✨
         val action = intent?.action ?: intent?.getStringExtra("ACTION")
         
-        // 1. Agar Notification Bar se tap hua hai ✨
         if (action == "MAGIC_TAP") {
+            // Notification Panel band hone ka wait karo aur scan shuru karo
             Handler(Looper.getMainLooper()).postDelayed({
                 startCaptureAndTranslate() 
             }, 500)
-        } 
-        // 2. Agar Dashboard se "Activate" kiya gaya hai 🚀
-        else {
+        } else {
+            // Dashboard se data receive karo
             val resultCode = intent?.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED
             val data = intent?.getParcelableExtra<Intent>("DATA")
             val langStr = intent?.getStringExtra("TARGET_LANG") ?: "Hindi"
@@ -77,23 +90,8 @@ class ScreenCaptureService : Service() {
                 showFloatingStar()
             }
         }
-
-        // Foreground Notification (Android 14 Requirements)
-        val channelId = "TAP_PRO_CHANNEL"
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channel = NotificationChannel(channelId, "Tap Translate", NotificationManager.IMPORTANCE_LOW)
-        manager.createNotificationChannel(channel)
-
-        val notification = Notification.Builder(this, channelId)
-            .setContentTitle("Magic Star 🌟 Active")
-            .setContentText("Ready to Translate")
-            .setSmallIcon(android.R.drawable.btn_star_big_on)
-            .build()
-
-        startForeground(1, notification)
         return START_STICKY
     }
-    // --- MAGIC LOGIC END ---
 
     @SuppressLint("ClickableViewAccessibility")
     private fun showFloatingStar() {
