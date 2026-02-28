@@ -1,70 +1,45 @@
 package com.tap.translate
 
-import android.app.Activity
-import android.content.Context
-import android.content.Intent
-import android.media.projection.MediaProjectionManager
-import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
-import android.view.View
-import android.widget.*
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.bottomnavigation.BottomNavigationView
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var projectionManager: MediaProjectionManager
-    private val REQUEST_CODE = 1000 
-    private var selectedLanguage = "Hindi"
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Naya layout load ho raha hai jisme fragment_container hai
         setContentView(R.layout.activity_main)
 
-        projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
 
-        val spinner = findViewById<Spinner>(R.id.languageSpinner)
-        val btnActivate = findViewById<Button>(R.id.btnSettings)
-
-        // 1. Spinner Setup (Languages)
-        val languages = arrayOf("Hindi", "Spanish", "French", "Arabic", "German")
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, languages)
-        spinner.adapter = adapter
-
-        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                selectedLanguage = languages[position]
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        // Pehla Page (Home) load karo jab app khule
+        if (savedInstanceState == null) {
+            supportFragmentManager.beginTransaction()
+                .replace(R.id.fragment_container, HomeFragment())
+                .commit()
         }
 
-        btnActivate.setOnClickListener {
-            // 2. Critical Check: Overlay Permission
-            if (!Settings.canDrawOverlays(this)) {
-                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
-                startActivity(intent)
-                Toast.makeText(this, "Pehle 'Display over other apps' on karein", Toast.LENGTH_LONG).show()
-            } else {
-                startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_CODE)
+        // Niche wale buttons ke click handle karna
+        bottomNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_home -> {
+                    supportFragmentManager.beginTransaction()
+                        .replace(R.id.fragment_container, HomeFragment())
+                        .commit()
+                    true
+                }
+                R.id.nav_history -> {
+                    Toast.makeText(this, "History Coming Soon!", Toast.LENGTH_SHORT).show()
+                    true
+                }
+                R.id.nav_settings -> {
+                    Toast.makeText(this, "Settings Coming Soon!", Toast.LENGTH_SHORT).show()
+                    true
+                }
+                else -> false
             }
-        }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-
-        if (requestCode == REQUEST_CODE && resultCode == Activity.RESULT_OK && data != null) {
-            val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
-                putExtra("RESULT_CODE", resultCode)
-                putExtra("DATA", data)
-                putExtra("TARGET_LANG", selectedLanguage)
-            }
-            startForegroundService(serviceIntent)
-            
-            // 🔥 YE HAI WO MAGIC LINE (App minimize ho jayegi aur Star dikhne lagega)
-            moveTaskToBack(true) 
-            
-            Toast.makeText(this, "$selectedLanguage Star 🌟 is now Active!", Toast.LENGTH_SHORT).show()
         }
     }
 }
