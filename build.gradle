@@ -1,29 +1,20 @@
-android {
-    // Android 14 ke liye 34 zaroori hai
-    compileSdk 34
-
-    defaultConfig {
-        applicationId "com.example.taptranslate" // Yahan apna package name rehne dein
-        minSdk 24
-        targetSdk 34  // Ise 34 karne se hi Restricted Settings ka rasta khulega
-        
-        // Version badhane se system ise naya app maanega
-        versionCode 2
-        versionName "2.0"
-
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
     }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.1.0'
+    }
+}
 
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
     }
-    
-    // Java 8 support zaroori hai naye SDK ke liye
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
+}
+
+tasks.register('clean', Delete) {
+    delete rootProject.buildDir
 }
