@@ -3,6 +3,7 @@ package com.tap.translate
 import android.annotation.SuppressLint
 import android.app.*
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.*
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -40,6 +41,7 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Notification turant dikhao - Android 14 requirement
         showNotification()
 
         if (intent?.action == "MAGIC_TAP") {
@@ -87,12 +89,19 @@ class ScreenCaptureService : Service() {
             val channel = NotificationChannel(channelId, "Active Service", NotificationManager.IMPORTANCE_LOW)
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
+        
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Tap Translate Active 🌟")
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setOngoing(true)
             .build()
-        startForeground(1, notification)
+
+        // ASLI FIX: Android 14 ke liye 'mediaProjection' type batana zaroori hai
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+        } else {
+            startForeground(1, notification)
+        }
     }
 
     private fun getLangCode(lang: String) = when (lang) {
