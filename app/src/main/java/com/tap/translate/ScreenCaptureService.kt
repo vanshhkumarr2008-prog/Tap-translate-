@@ -40,18 +40,37 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        showNotification() 
+        // 1. Sabse pehle notification (Android 14 rule)
+        showNotification()
 
         if (intent?.action == "MAGIC_TAP") {
-            if (mediaProjection == null) {
-                // Agar session expire ho gaya toh activity kholo
-                val i = Intent(this, MainActivity::class.java)
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(i)
-                return START_STICKY
+            // Tile se naya data aaya hai
+            val resultCode = intent.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED)
+            val data: Intent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra("DATA", Intent::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra("DATA")
             }
-            Handler(Looper.getMainLooper()).postDelayed({ startCaptureAndTranslate() }, 500)
+
+            if (data != null && resultCode == Activity.RESULT_OK) {
+                val projectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                
+                // Purana session stop karo agar koi hai
+                mediaProjection?.stop()
+                
+                // Naya session shuru karo
+                mediaProjection = projectionManager.getMediaProjection(resultCode, data)
+                
+                // Thoda delay taaki system stable ho jaye
+                Handler(Looper.getMainLooper()).postDelayed({
+                    startCaptureAndTranslate()
+                }, 600)
+            } else {
+                Toast.makeText(this, "Permission Error!", Toast.LENGTH_SHORT).show()
+            }
         } else {
+            // Ye tab ke liye jab aap App ke button se activate karte ho
             val resultCode = intent?.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED
             val data: Intent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 intent?.getParcelableExtra("DATA", Intent::class.java)
@@ -79,7 +98,7 @@ class ScreenCaptureService : Service() {
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
         val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Tap Translate is Ready 🌟")
+            .setContentTitle("Tap Translate Active 🌟")
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setOngoing(true)
             .build()
@@ -111,6 +130,8 @@ class ScreenCaptureService : Service() {
     private fun startCaptureAndTranslate() {
         if (mediaProjection == null) return
         val metrics = resources.displayMetrics
+        
+        // ImageReader create karo
         imageReader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, PixelFormat.RGBA_8888, 2)
         
         virtualDisplay = mediaProjection?.createVirtualDisplay(
@@ -127,15 +148,19 @@ class ScreenCaptureService : Service() {
                 val rowStride = plane.rowStride
                 val rowPadding = rowStride - pixelStride * image.width
                 
+                // RowPadding handling (Android 14 fix for different screen aspect ratios)
                 val bitmap = Bitmap.createBitmap(image.width + rowPadding / pixelStride, image.height, Bitmap.Config.ARGB_8888)
                 bitmap.copyPixelsFromBuffer(buffer)
+                
+                // Final clean bitmap
                 val finalBitmap = Bitmap.createBitmap(bitmap, 0, 0, image.width, image.height)
                 image.close()
                 processAndShow(finalBitmap)
             }
+            // Cleanup capture resources
             virtualDisplay?.release()
             imageReader?.close()
-        }, 400)
+        }, 500)
     }
 
     private fun processAndShow(bitmap: Bitmap) {
@@ -144,6 +169,7 @@ class ScreenCaptureService : Service() {
             val options = TranslatorOptions.Builder()
                 .setSourceLanguage(TranslateLanguage.ENGLISH).setTargetLanguage(targetLangCode).build()
             val translator = Translation.getClient(options)
+            
             translator.downloadModelIfNeeded().addOnSuccessListener {
                 removeOverlayIfExists()
                 overlayContainer = FrameLayout(this)
@@ -152,13 +178,17 @@ class ScreenCaptureService : Service() {
                     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                     PixelFormat.TRANSLUCENT
                 )
+                
                 for (block in visionText.textBlocks) {
                     translator.translate(block.text).addOnSuccessListener { translated ->
+                        // Background thread par history save
                         try { dbHelper.insertHistory(block.text, translated) } catch (e: Exception) {}
+                        
                         val tv = TextView(this).apply {
                             text = translated
                             setTextColor(Color.YELLOW)
                             setBackgroundColor(Color.parseColor("#99000000"))
+                            textSize = 15f
                             x = block.boundingBox?.left?.toFloat() ?: 0f
                             y = block.boundingBox?.top?.toFloat() ?: 0f
                         }
