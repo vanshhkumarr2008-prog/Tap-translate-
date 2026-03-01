@@ -31,18 +31,6 @@
             android:foregroundServiceType="mediaProjection" />
 
         <service
-            android:name=".MyAccessibilityService"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.view.accessibility.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.view.accessibility.accessibility_service"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
-
-        <service
             android:name=".MagicTileService"
             android:exported="true"
             android:label="Magic Star 🌟"
@@ -51,6 +39,19 @@
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
+        </service>
+
+        <service
+            android:name=".MyAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true"
+            android:label="Tap Translate Service">
+            <intent-filter>
+                <action android:name="android.view.accessibility.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.accessibility.accessibility_service"
+                android:resource="@xml/accessibility_service_config" />
         </service>
 
     </application>
