@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace 'com.example.taptranslate' // Apna sahi package name check kar lena
+    namespace 'com.example.taptranslate'
     compileSdk 34
 
     defaultConfig {
