@@ -21,7 +21,7 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 
 class ScreenCaptureService : Service() {
- l
+
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
@@ -40,11 +40,9 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // 1. Sabse pehle notification (Android 14 rule)
         showNotification()
 
         if (intent?.action == "MAGIC_TAP") {
-            // Tile se naya data aaya hai
             val resultCode = intent.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED)
             val data: Intent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 intent.getParcelableExtra("DATA", Intent::class.java)
@@ -55,22 +53,14 @@ class ScreenCaptureService : Service() {
 
             if (data != null && resultCode == Activity.RESULT_OK) {
                 val projectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                
-                // Purana session stop karo agar koi hai
                 mediaProjection?.stop()
-                
-                // Naya session shuru karo
                 mediaProjection = projectionManager.getMediaProjection(resultCode, data)
                 
-                // Thoda delay taaki system stable ho jaye
                 Handler(Looper.getMainLooper()).postDelayed({
                     startCaptureAndTranslate()
                 }, 600)
-            } else {
-                Toast.makeText(this, "Permission Error!", Toast.LENGTH_SHORT).show()
             }
         } else {
-            // Ye tab ke liye jab aap App ke button se activate karte ho
             val resultCode = intent?.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED
             val data: Intent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 intent?.getParcelableExtra("DATA", Intent::class.java)
@@ -130,8 +120,6 @@ class ScreenCaptureService : Service() {
     private fun startCaptureAndTranslate() {
         if (mediaProjection == null) return
         val metrics = resources.displayMetrics
-        
-        // ImageReader create karo
         imageReader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, PixelFormat.RGBA_8888, 2)
         
         virtualDisplay = mediaProjection?.createVirtualDisplay(
@@ -148,16 +136,13 @@ class ScreenCaptureService : Service() {
                 val rowStride = plane.rowStride
                 val rowPadding = rowStride - pixelStride * image.width
                 
-                // RowPadding handling (Android 14 fix for different screen aspect ratios)
                 val bitmap = Bitmap.createBitmap(image.width + rowPadding / pixelStride, image.height, Bitmap.Config.ARGB_8888)
                 bitmap.copyPixelsFromBuffer(buffer)
                 
-                // Final clean bitmap
                 val finalBitmap = Bitmap.createBitmap(bitmap, 0, 0, image.width, image.height)
                 image.close()
                 processAndShow(finalBitmap)
             }
-            // Cleanup capture resources
             virtualDisplay?.release()
             imageReader?.close()
         }, 500)
@@ -181,7 +166,6 @@ class ScreenCaptureService : Service() {
                 
                 for (block in visionText.textBlocks) {
                     translator.translate(block.text).addOnSuccessListener { translated ->
-                        // Background thread par history save
                         try { dbHelper.insertHistory(block.text, translated) } catch (e: Exception) {}
                         
                         val tv = TextView(this).apply {
