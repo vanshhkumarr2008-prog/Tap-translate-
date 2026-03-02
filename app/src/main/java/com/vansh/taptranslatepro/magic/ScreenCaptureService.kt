@@ -28,7 +28,10 @@ class ScreenCaptureService : Service() {
 
             mediaProjection = projectionManager.getMediaProjection(resultCode, data)
 
-            // Future: yahi se real screen capture start hoga
+            // ✅ TEST BROADCAST TO OVERLAY
+            val testIntent = Intent("UPDATE_OVERLAY_TEXT")
+            testIntent.putExtra("translatedText", "🔥 Live Capture Engine Connected!")
+            sendBroadcast(testIntent)
         }
 
         return START_STICKY
