@@ -1,31 +1,37 @@
 package com.vansh.taptranslatepro.magic
 
+import android.content.Intent
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import android.widget.Toast
 
 class MagicTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
 
-        // Tile ko active karo
-        qsTile.state = Tile.STATE_ACTIVE
-        qsTile.updateTile()
+        if (qsTile.state == Tile.STATE_INACTIVE) {
 
-        // Toast for debug / initial testing
-        Toast.makeText(this, "Magic Tile Activated 🚀", Toast.LENGTH_SHORT).show()
+            qsTile.state = Tile.STATE_ACTIVE
+            qsTile.updateTile()
 
-        // Future: Call AccessibilityService logic yaha se trigger hoga
+            // Start Overlay
+            val intent = Intent(this, OverlayService::class.java)
+            startService(intent)
+
+        } else {
+
+            qsTile.state = Tile.STATE_INACTIVE
+            qsTile.updateTile()
+
+            // Stop Overlay
+            val intent = Intent(this, OverlayService::class.java)
+            stopService(intent)
+        }
     }
 
     override fun onTileAdded() {
         super.onTileAdded()
         qsTile.state = Tile.STATE_INACTIVE
         qsTile.updateTile()
-    }
-
-    override fun onTileRemoved() {
-        super.onTileRemoved()
     }
 }
