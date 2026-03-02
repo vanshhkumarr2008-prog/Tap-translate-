@@ -2,17 +2,36 @@ package com.vansh.taptranslatepro.magic
 
 import android.app.*
 import android.content.Intent
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 
 class ScreenCaptureService : Service() {
 
+    private var mediaProjection: MediaProjection? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onCreate() {
-        super.onCreate()
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+
         startForegroundServiceProperly()
+
+        val resultCode = intent?.getIntExtra("resultCode", -1) ?: -1
+        val data = intent?.getParcelableExtra<Intent>("data")
+
+        if (resultCode != -1 && data != null) {
+
+            val projectionManager =
+                getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+
+            mediaProjection = projectionManager.getMediaProjection(resultCode, data)
+
+            // Future: yahi se real screen capture start hoga
+        }
+
+        return START_STICKY
     }
 
     private fun startForegroundServiceProperly() {
@@ -31,7 +50,7 @@ class ScreenCaptureService : Service() {
 
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Tap Translate Running")
-            .setContentText("Magic capture service active")
+            .setContentText("Screen capture active")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .build()
 
@@ -40,6 +59,7 @@ class ScreenCaptureService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        mediaProjection?.stop()
         stopForeground(true)
     }
 }
