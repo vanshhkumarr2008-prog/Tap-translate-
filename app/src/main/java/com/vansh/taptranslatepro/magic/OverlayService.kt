@@ -1,13 +1,14 @@
 package com.vansh.taptranslatepro.magic
 
 import android.app.Service
-import android.content.Intent
+import android.content.*
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
 import android.view.*
 import android.view.animation.AlphaAnimation
 import android.widget.ImageView
+import android.widget.TextView
 import com.vansh.taptranslatepro.R
 
 class OverlayService : Service() {
@@ -15,16 +16,30 @@ class OverlayService : Service() {
     private var overlayView: View? = null
     private lateinit var windowManager: WindowManager
     private lateinit var params: WindowManager.LayoutParams
+    private lateinit var resultText: TextView
+
+    private val textReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val newText = intent?.getStringExtra("translatedText")
+            if (!newText.isNullOrEmpty()) {
+                resultText.text = newText
+            }
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
 
+        registerReceiver(textReceiver, IntentFilter("UPDATE_OVERLAY_TEXT"))
+
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
         overlayView = LayoutInflater.from(this)
             .inflate(R.layout.overlay_layout, null)
+
+        resultText = overlayView!!.findViewById(R.id.txtResult)
 
         params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -51,7 +66,6 @@ class OverlayService : Service() {
     }
 
     private fun addDragFeature() {
-
         overlayView?.setOnTouchListener(object : View.OnTouchListener {
 
             private var initialX = 0
@@ -61,7 +75,6 @@ class OverlayService : Service() {
 
             override fun onTouch(v: View?, event: MotionEvent): Boolean {
                 when (event.action) {
-
                     MotionEvent.ACTION_DOWN -> {
                         initialX = params.x
                         initialY = params.y
@@ -69,7 +82,6 @@ class OverlayService : Service() {
                         initialTouchY = event.rawY
                         return true
                     }
-
                     MotionEvent.ACTION_MOVE -> {
                         params.x = initialX + (event.rawX - initialTouchX).toInt()
                         params.y = initialY + (event.rawY - initialTouchY).toInt()
@@ -90,6 +102,7 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        unregisterReceiver(textReceiver)
         if (overlayView != null) {
             windowManager.removeView(overlayView)
         }
