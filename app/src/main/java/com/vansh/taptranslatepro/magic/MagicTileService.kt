@@ -15,8 +15,10 @@ class MagicTileService : TileService() {
             qsTile.updateTile()
 
             // Start Overlay
-            val intent = Intent(this, OverlayService::class.java)
-            startService(intent)
+            startService(Intent(this, OverlayService::class.java))
+
+            // Start Screen Capture Service
+            startService(Intent(this, ScreenCaptureService::class.java))
 
         } else {
 
@@ -24,8 +26,10 @@ class MagicTileService : TileService() {
             qsTile.updateTile()
 
             // Stop Overlay
-            val intent = Intent(this, OverlayService::class.java)
-            stopService(intent)
+            stopService(Intent(this, OverlayService::class.java))
+
+            // Stop Screen Capture
+            stopService(Intent(this, ScreenCaptureService::class.java))
         }
     }
 
