@@ -11,7 +11,7 @@ import com.vansh.taptranslatepro.magic.ScreenCaptureService
 class ProActivity : AppCompatActivity() {
 
     private lateinit var projectionManager: MediaProjectionManager
-    private val REQUEST_CODE = 1001
+    private val REQUEST_CODE = 999
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -20,28 +20,26 @@ class ProActivity : AppCompatActivity() {
         projectionManager =
             getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
-        val btnEnableMagic = findViewById<Button>(R.id.btnEnableMagic)
+        val enableBtn = findViewById<Button>(R.id.btnEnableMagic)
 
-        btnEnableMagic.setOnClickListener {
-            startScreenCapturePermission()
+        enableBtn.setOnClickListener {
+            val captureIntent = projectionManager.createScreenCaptureIntent()
+            startActivityForResult(captureIntent, REQUEST_CODE)
         }
-    }
-
-    private fun startScreenCapturePermission() {
-        val intent = projectionManager.createScreenCaptureIntent()
-        startActivityForResult(intent, REQUEST_CODE)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
-        if (requestCode == REQUEST_CODE && resultCode == Activity.RESULT_OK && data != null) {
+        if (requestCode == REQUEST_CODE &&
+            resultCode == Activity.RESULT_OK &&
+            data != null) {
 
-            val serviceIntent = Intent(this, ScreenCaptureService::class.java)
-            serviceIntent.putExtra("resultCode", resultCode)
-            serviceIntent.putExtra("data", data)
+            val intent = Intent(this, ScreenCaptureService::class.java)
+            intent.putExtra("resultCode", resultCode)
+            intent.putExtra("data", data)
 
-            startForegroundService(serviceIntent)
+            startForegroundService(intent)
         }
     }
 }
